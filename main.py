@@ -1,3 +1,4 @@
+from typing import Union, List
 from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
@@ -8,11 +9,6 @@ from opencc import OpenCC
 app = FastAPI(title="Helsinki-NLP Translation API")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-class TranslateRequest(BaseModel):
-  text: str
-  source: str  # e.g. "en"
-  target: str | list[str]  # e.g. "fr" or ["fr", "de"]
 
 
 @lru_cache(maxsize=32)
@@ -39,15 +35,12 @@ def load_model(source: str, target: str):
 
 def translate_text(text: str, source: str, target: str) -> str:
   tokenizer, model = load_model(source, target)
-
-  if source == "pt" or source == "pt_BR":
-    text = f">>en<< {text}"
   
   if target == "pt" or target == "pt_BR":
     text = f">>pt<< {text}"
   
   if target == "bn":
-    text = f">>bn<< {text}"
+    text = f">>ben<< {text}"
 
   inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(DEVICE)
   outputs = model.generate(**inputs, max_length=512)
@@ -68,6 +61,12 @@ def read_root():
 @app.get("/health")
 def health_check():
   return {"status": "ok"}
+
+
+class TranslateRequest(BaseModel):
+  text: str
+  source: str  # e.g. "en"
+  target: Union[str, List[str]]  # e.g. "fr" or ["fr", "de"]
 
 @app.post("/translate")
 def translate(req: TranslateRequest):
