@@ -64,13 +64,13 @@ def health_check():
 
 
 class TranslateRequest(BaseModel):
-  text: Union[str, List[str]]
+  q: Union[str, List[str]]
   source: str  # e.g. "en"
   target: Union[str, List[str]]  # e.g. "fr" or ["fr", "de"]
 
 @app.post("/translate")
 def translate(req: TranslateRequest):
-  text_arr = req.text
+  text_arr = req.q
   if isinstance(text_arr, str):
     text_arr = [text_arr]
   
