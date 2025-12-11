@@ -64,16 +64,19 @@ def health_check():
 
 
 class TranslateRequest(BaseModel):
-  text: str
+  text: Union[str, List[str]]
   source: str  # e.g. "en"
   target: Union[str, List[str]]  # e.g. "fr" or ["fr", "de"]
 
 @app.post("/translate")
 def translate(req: TranslateRequest):
-  text = req.text
+  text_arr = req.text
+  if isinstance(text_arr, str):
+    text_arr = [text_arr]
+  
   source = req.source.lower()
-  targets_arr = req.target
 
+  targets_arr = req.target
   if isinstance(targets_arr, str):
     targets_arr = [targets_arr.lower()]
 
@@ -82,24 +85,30 @@ def translate(req: TranslateRequest):
 
     target = target_current.lower()
 
-    if source == "zht":
-      text = t2s(text)
-      source = "zh"
+    result[target_current] = []
 
-    if target == "zht":
-      target = "zh"
+    for text in text_arr:
 
-    if source != "en":
-      text_en = translate_text(text, source, "en")
-    else:
-      text_en = text
+      if source == "zht":
+        text = t2s(text)
+        source = "zh"
 
-    if target != "en":
-      result[target_current] = translate_text(text_en, "en", target)
-    else:
-      result[target_current] = text_en
-    
-    if target_current == "zht":
-      result[target_current] = s2t(result[target_current])
+      if target == "zht":
+        target = "zh"
+
+      if source != "en":
+        text_en = translate_text(text, source, "en")
+      else:
+        text_en = text
+
+      if target != "en":
+        translation = translate_text(text_en, "en", target)
+      else:
+        translation = text_en
+      
+      if target_current == "zht":
+        translation = s2t(translation)
+
+      result[target_current].append(translation)
 
   return {"translatedText": result}
