@@ -86,6 +86,15 @@ def translate(req: TranslateRequest):
 
     target = target_current.lower()
 
+    if target == "zht":
+      target = "zh"
+    
+    if target == "sw":
+      target = "swc"
+    
+    if source == "sw":
+      source = "swc"
+
     result[target_current] = []
 
     for text in text_arr:
@@ -93,9 +102,6 @@ def translate(req: TranslateRequest):
       if source == "zht":
         text = t2s(text)
         source = "zh"
-
-      if target == "zht":
-        target = "zh"
 
       if source != "en":
         text_en = translate_text(text, source, "en")
