@@ -18,6 +18,13 @@ class TranslateRequest(BaseModel):
 @lru_cache(maxsize=32)
 def load_model(source: str, target: str):
   """Load and cache Helsinki-NLP model."""
+
+  if source == "pt" or source == "pt_BR":
+    source = "ROMANCE"
+  
+  if target == "pt" or target == "pt_BR":
+    target = "ROMANCE"
+
   model_name = f"Helsinki-NLP/opus-mt-{source}-{target}"
 
   tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
@@ -29,6 +36,13 @@ def load_model(source: str, target: str):
 
 def translate_text(text: str, source: str, target: str) -> str:
   tokenizer, model = load_model(source, target)
+
+  if source == "pt" or source == "pt_BR":
+    text = f">>en<< {text}"
+  
+  if target == "pt" or target == "pt_BR":
+    text = f">>pt<< {text}"
+
   inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(DEVICE)
   outputs = model.generate(**inputs, max_length=512)
   return tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -45,35 +59,35 @@ def s2t(text: str) -> str:
 @app.post("/translate")
 def translate(req: TranslateRequest):
   text = req.text
-  source = req.source
+  source = req.source.lower()
   targets_arr = req.target
 
   if isinstance(targets_arr, str):
-    targets_arr = [targets_arr]
+    targets_arr = [targets_arr.lower()]
 
   result = {}
   for target_current in targets_arr:
 
-    target = target_current
+    target = target_current.lower()
 
-    if source.lower() == "zht":
+    if source == "zht":
       text = t2s(text)
       source = "zh"
 
-    if target.lower() == "zht":
+    if target == "zht":
       target = "zh"
 
-    if source.lower() != "en":
+    if source != "en":
       text_en = translate_text(text, source, "en")
     else:
       text_en = text
 
-    if target.lower() != "en":
+    if target != "en":
       result[target_current] = translate_text(text_en, "en", target)
     else:
       result[target_current] = text_en
     
-    if target_current.lower() == "zht":
+    if target_current == "zht":
       result[target_current] = s2t(result[target_current])
 
   return {"translatedText": result}
