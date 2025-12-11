@@ -12,7 +12,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 class TranslateRequest(BaseModel):
   text: str
   source: str  # e.g. "en"
-  target: str  # e.g. "fr"
+  target: str | list[str]  # e.g. "fr" or ["fr", "de"]
 
 
 @lru_cache(maxsize=32)
@@ -61,6 +61,13 @@ def s2t(text: str) -> str:
   cc = OpenCC('s2t')
   return cc.convert(text)
 
+@app.get("/")
+def read_root():
+  return {"message": "Welcome to the eMedia Translation API"}
+
+@app.get("/health")
+def health_check():
+  return {"status": "ok"}
 
 @app.post("/translate")
 def translate(req: TranslateRequest):
