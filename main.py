@@ -24,6 +24,9 @@ def load_model(source: str, target: str):
   
   if target == "pt" or target == "pt_BR":
     target = "ROMANCE"
+  
+  if target == "bn":
+    target = "inc"
 
   model_name = f"Helsinki-NLP/opus-mt-{source}-{target}"
 
@@ -42,6 +45,9 @@ def translate_text(text: str, source: str, target: str) -> str:
   
   if target == "pt" or target == "pt_BR":
     text = f">>pt<< {text}"
+  
+  if target == "bn":
+    text = f">>bn<< {text}"
 
   inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(DEVICE)
   outputs = model.generate(**inputs, max_length=512)
