@@ -1,0 +1,38 @@
+{
+	"language_pairs": [
+		"en-fr",
+		"fr-en",
+
+		"en-de",
+		"de-en",
+
+		"en-es",
+		"es-en",
+
+		"en-ru",
+		"ru-en",
+
+		"en-zh",
+		"zh-en",
+		"en-zht",
+		"zht-en",
+
+		"en-hi",
+		"hi-en",
+
+		"en-ar",
+		"ar-en",
+
+		"en-pt",
+		"pt-en",
+
+		"en-bn",
+		"bn-en",
+
+		"en-ur",
+		"ur-en",
+
+		"en-swc",
+		"swc-en"
+	]
+}

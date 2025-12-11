@@ -1,0 +1,79 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
+from functools import lru_cache
+from opencc import OpenCC
+
+app = FastAPI(title="Helsinki-NLP Translation API")
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+class TranslateRequest(BaseModel):
+  text: str
+  source: str  # e.g. "en"
+  target: str  # e.g. "fr"
+
+
+@lru_cache(maxsize=32)
+def load_model(source: str, target: str):
+  """Load and cache Helsinki-NLP model."""
+  model_name = f"Helsinki-NLP/opus-mt-{source}-{target}"
+
+  tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
+  model = AutoModelForSeq2SeqLM.from_pretrained(model_name, local_files_only=True)
+  model.to(DEVICE)
+
+  return tokenizer, model
+
+
+def translate_text(text: str, source: str, target: str) -> str:
+  tokenizer, model = load_model(source, target)
+  inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(DEVICE)
+  outputs = model.generate(**inputs, max_length=512)
+  return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+def t2s(text: str) -> str:
+  cc = OpenCC('t2s')
+  return cc.convert(text)
+
+def s2t(text: str) -> str:
+  cc = OpenCC('s2t')
+  return cc.convert(text)
+
+
+@app.post("/translate")
+def translate(req: TranslateRequest):
+  text = req.text
+  source = req.source
+  targets_arr = req.target
+
+  if isinstance(targets_arr, str):
+    targets_arr = [targets_arr]
+
+  result = {}
+  for target_current in targets_arr:
+
+    target = target_current
+
+    if source.lower() == "zht":
+      text = t2s(text)
+      source = "zh"
+
+    if target.lower() == "zht":
+      target = "zh"
+
+    if source.lower() != "en":
+      text_en = translate_text(text, source, "en")
+    else:
+      text_en = text
+
+    if target.lower() != "en":
+      result[target_current] = translate_text(text_en, "en", target)
+    else:
+      result[target_current] = text_en
+    
+    if target_current.lower() == "zht":
+      result[target_current] = s2t(result[target_current])
+
+  return {"translatedText": result}
