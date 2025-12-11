@@ -59,6 +59,7 @@ def read_root():
   return {"message": "Welcome to the eMedia Translation API"}
 
 @app.get("/health")
+@app.get("/health.ico")
 def health_check():
   return {"status": "ok"}
 
