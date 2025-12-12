@@ -54,7 +54,7 @@ def translate_text(text: str, source: str, target: str) -> str:
   tokenizer, model = load_model(source, target)
   
   if target == "pt" or target == "pt_BR":
-    text = f">>pt<< {text}"
+    text = f">>{target}<< {text}"
   
   if target == "bn":
     text = f">>ben<< {text}"
