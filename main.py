@@ -15,6 +15,8 @@ available_languages = [
   "fr",
   "de",
   "es",
+  "pt",
+  "pt_BR",
   "ru",
   "zh",
   "zht",
@@ -22,6 +24,7 @@ available_languages = [
   "ar",
   "bn",
   "ur",
+  "sw",
   "swc"
 ]
 
@@ -80,11 +83,11 @@ def health_check():
 
 def verify_langs(source: str, targets: List[str]) -> Union[bool, str]:
   if source not in available_languages:
-    return False, f"Source language '{source}' is not supported."
+    return False, f"Source language '{source}' is not supported. Available languages: {', '.join(available_languages)}"
   
   for target in targets:
     if target not in available_languages:
-      return False, f"Target language '{target}' is not supported."
+      return False, f"Target language '{target}' is not supported. Available languages: {', '.join(available_languages)}"
   
   return True, ""
 
