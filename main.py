@@ -26,8 +26,8 @@ def load_model(source: str, target: str):
 
   model_name = f"Helsinki-NLP/opus-mt-{source}-{target}"
 
-  tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
-  model = AutoModelForSeq2SeqLM.from_pretrained(model_name, local_files_only=True)
+  tokenizer = AutoTokenizer.from_pretrained(model_name)#, local_files_only=True)
+  model = AutoModelForSeq2SeqLM.from_pretrained(model_name)#, local_files_only=True)
   model.to(DEVICE)
 
   return tokenizer, model
