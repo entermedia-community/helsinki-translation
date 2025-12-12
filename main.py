@@ -10,6 +10,20 @@ app = FastAPI(title="Helsinki-NLP Translation API")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+available_languages = [
+  "en",
+  "fr",
+  "de",
+  "es",
+  "ru",
+  "zh",
+  "zht",
+  "hi",
+  "ar",
+  "bn",
+  "ur",
+  "swc"
+]
 
 @lru_cache(maxsize=32)
 def load_model(source: str, target: str):
@@ -64,6 +78,16 @@ def health_check():
   return {"status": "ok"}
 
 
+def verify_langs(source: str, targets: List[str]) -> Union[bool, str]:
+  if source not in available_languages:
+    return False, f"Source language '{source}' is not supported."
+  
+  for target in targets:
+    if target not in available_languages:
+      return False, f"Target language '{target}' is not supported."
+  
+  return True, ""
+
 class TranslateRequest(BaseModel):
   q: Union[str, List[str]]
   source: str  # e.g. "en"
@@ -76,10 +100,14 @@ def translate(req: TranslateRequest):
     text_arr = [text_arr]
   
   source = req.source.lower()
-
   targets_arr = req.target
+
   if isinstance(targets_arr, str):
     targets_arr = [targets_arr.lower()]
+  
+  valid, err = verify_langs(source, targets_arr)
+  if not valid:
+    return {"error": err}
 
   result = {}
   for target_current in targets_arr:
