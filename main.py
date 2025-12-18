@@ -1,6 +1,6 @@
-from typing import Union, List
-from fastapi import FastAPI
-from pydantic import BaseModel
+from typing import Union, List, Optional
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 from functools import lru_cache
@@ -33,10 +33,13 @@ available_languages = {
   "sw": "swa_Latn"
 }
 
-
-def translate_text(text: str, src: str, target: str) -> str:
-  inputs = tokenizer(text, src_lang=src, return_tensors="pt").to(DEVICE)
-  generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.lang_code_to_id[target])
+@lru_cache(maxsize=64)
+def translate_text(text: str, src: str, target: str, max_length: Optional[int] = None) -> str:
+  if max_length is None:
+    max_length = len(text.split()) * 2 + 50
+  tokenizer.src_lang = src
+  inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=max_length).to(DEVICE)
+  generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.lang_code_to_id[target], num_beams=5, early_stopping=True, max_length=max_length)
   return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
 
 @app.get("/")
@@ -46,7 +49,7 @@ def read_root():
 @app.get("/health")
 @app.get("/health.ico")
 def health_check():
-  return {"status": "ok"}
+  return {"status": "ok", "model": model_name, "device": DEVICE}
 
 
 def verify_langs(source: str, targets: List[str]) -> Union[bool, str]:
@@ -60,9 +63,13 @@ def verify_langs(source: str, targets: List[str]) -> Union[bool, str]:
   return True, ""
 
 class TranslateRequest(BaseModel):
-  q: Union[str, List[str]]
-  source: str  # e.g. "en"
-  target: Union[str, List[str]]  # e.g. "fr" or ["fr", "de"]
+  q: Union[str, List[str]] = Field(..., description="Text or list of texts to translate")
+  source: str = Field(..., description="Source language code, e.g. 'en'")
+  target: Union[str, List[str]] = Field(..., description="Target language code(s), e.g. 'fr' or ['fr', 'de']")
+  max_length: Optional[int] = Field(None, description="Maximum length of the translated text")
+
+class TranslationResponse(BaseModel):
+  translatedText: dict = Field(..., description="Dictionary with target language codes as keys and list of translated texts as values")
 
 @app.post("/translate")
 def translate(req: TranslateRequest):
@@ -80,15 +87,22 @@ def translate(req: TranslateRequest):
   if not valid:
     return {"error": err}
 
-  result = {}
-  for target_current in targets_arr:
+  try:
+    result = {}
+    for target_current in targets_arr:
 
-    target = target_current.lower()
+      target = target_current.lower()
 
-    result[target_current] = []
+      result[target_current] = []
 
-    for text in text_arr:
-      translation = translate_text(text, src=available_languages[source], target=available_languages[target])
-      result[target_current].append(translation)
+      for text in text_arr:
+        translation = translate_text(text, src=available_languages[source], target=available_languages[target], max_length=req.max_length)
+        result[target_current].append(translation)
 
-  return {"translatedText": result}
+    return TranslationResponse(translatedText=result)
+
+  except Exception as e:
+    raise HTTPException(
+      status_code=500, 
+      detail=f"Translation error: {str(e)}"
+    )
