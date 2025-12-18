@@ -13,7 +13,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 model_name = "facebook/nllb-200-distilled-600M"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name, device_map="auto", torch_dtype=torch.float16)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name, device_map="auto", dtype=torch.float16)
 model.to(DEVICE)
 
 available_languages = {
@@ -36,8 +36,8 @@ available_languages = {
 
 def translate_text(text: str, src: str, target: str) -> str:
   inputs = tokenizer(text, src_lang=src, return_tensors="pt").to(DEVICE)
-  outputs = model.generate(**inputs, forced_bos_token_id=tokenizer.lang_code_to_id[target])
-  return tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+  generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.lang_code_to_id[target])
+  return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
 
 @app.get("/")
 def read_root():

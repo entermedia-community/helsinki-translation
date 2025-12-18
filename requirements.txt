@@ -6,3 +6,4 @@ torch
 opencc
 sentencepiece
 sacremoses
+accelerate
