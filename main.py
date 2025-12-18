@@ -38,9 +38,26 @@ def translate_text(text: str, src: str, target: str, max_length: Optional[int] =
   if max_length is None:
     max_length = len(text.split()) * 2 + 50
   tokenizer.src_lang = src
-  inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=max_length).to(DEVICE)
-  generated_tokens = model.generate(**inputs, forced_bos_token_id=tokenizer.lang_code_to_id[target], num_beams=5, early_stopping=True, max_length=max_length)
-  return tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
+  inputs = tokenizer(
+    text, 
+    return_tensors="pt", 
+    padding=True, 
+    truncation=True, 
+    max_length=max_length
+  ).to(DEVICE)
+
+  target_id = tokenizer.convert_tokens_to_ids(target)
+  generated_tokens = model.generate(
+    **inputs, 
+    forced_bos_token_id=target_id, 
+    num_beams=5, 
+    early_stopping=True, 
+    max_length=max_length
+  )
+  return tokenizer.batch_decode(
+    generated_tokens, 
+    skip_special_tokens=True
+  )[0]
 
 @app.get("/")
 def read_root():
