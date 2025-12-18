@@ -30,7 +30,7 @@ available_languages = {
   "ar": "ara_Arab",
   "bn": "ben_Beng",
   "ur": "urd_Arab",
-  "sw": "swa_Latn"
+  "sw": "swh_Latn"
 }
 
 @lru_cache(maxsize=64)
