@@ -27,7 +27,7 @@ available_languages = {
   "zh": "zho_Hans",
   "zht": "zho_Hant",
   "hi": "hin_Deva",
-  "ar": "ara_Arab",
+  "ar": "arb_Arab",
   "bn": "ben_Beng",
   "ur": "urd_Arab",
   "sw": "swh_Latn"
