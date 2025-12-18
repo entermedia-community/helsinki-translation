@@ -6,70 +6,38 @@ import torch
 from functools import lru_cache
 from opencc import OpenCC
 
-app = FastAPI(title="Helsinki-NLP Translation API")
+app = FastAPI(title="eMedia Translation API")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-available_languages = [
-  "en",
-  "fr",
-  "de",
-  "es",
-  "pt",
-  "pt_BR",
-  "ru",
-  "zh",
-  "zht",
-  "hi",
-  "ar",
-  "bn",
-  "ur",
-  "sw",
-  "swc"
-]
+model_name = "facebook/nllb-200-distilled-600M"
 
-@lru_cache(maxsize=32)
-def load_model(source: str, target: str):
-  """Load and cache Helsinki-NLP model."""
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name, device_map="auto", torch_dtype=torch.float16)
+model.to(DEVICE)
 
-  if source == "pt" or source == "pt_BR":
-    source = "ROMANCE"
-  
-  if target == "pt" or target == "pt_BR":
-    target = "ROMANCE"
-  
-  if target == "bn":
-    target = "inc"
-
-  model_name = f"Helsinki-NLP/opus-mt-{source}-{target}"
-
-  tokenizer = AutoTokenizer.from_pretrained(model_name)#, local_files_only=True)
-  model = AutoModelForSeq2SeqLM.from_pretrained(model_name)#, local_files_only=True)
-  model.to(DEVICE)
-
-  return tokenizer, model
+available_languages = {
+  "en": "eng_Latn",
+  "fr": "fra_Latn",
+  "de": "deu_Latn",
+  "es": "spa_Latn",
+  "pt": "por_Latn",
+  "pt_BR": "por_Brai",  # Brazilian Portuguese
+  "ru": "rus_Cyrl",
+  "zh": "zho_Hans",
+  "zht": "zho_Hant",
+  "hi": "hin_Deva",
+  "ar": "ara_Arab",
+  "bn": "ben_Beng",
+  "ur": "urd_Arab",
+  "sw": "swa_Latn"
+}
 
 
-def translate_text(text: str, source: str, target: str) -> str:
-  tokenizer, model = load_model(source, target)
-  
-  if target == "pt" or target == "pt_BR":
-    text = f">>{target}<< {text}"
-  
-  if target == "bn":
-    text = f">>ben<< {text}"
-
-  inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(DEVICE)
-  outputs = model.generate(**inputs, max_length=512)
-  return tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-def t2s(text: str) -> str:
-  cc = OpenCC('t2s')
-  return cc.convert(text)
-
-def s2t(text: str) -> str:
-  cc = OpenCC('s2t')
-  return cc.convert(text)
+def translate_text(text: str, src: str, target: str) -> str:
+  inputs = tokenizer(text, src_lang=src, return_tensors="pt").to(DEVICE)
+  outputs = model.generate(**inputs, forced_bos_token_id=tokenizer.lang_code_to_id[target])
+  return tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
 
 @app.get("/")
 def read_root():
@@ -82,11 +50,11 @@ def health_check():
 
 
 def verify_langs(source: str, targets: List[str]) -> Union[bool, str]:
-  if source not in available_languages:
+  if source not in available_languages.keys():
     return False, f"Source language '{source}' is not supported. Available languages: {', '.join(available_languages)}"
   
   for target in targets:
-    if target not in available_languages:
+    if target not in available_languages.keys():
       return False, f"Target language '{target}' is not supported. Available languages: {', '.join(available_languages)}"
   
   return True, ""
@@ -117,36 +85,10 @@ def translate(req: TranslateRequest):
 
     target = target_current.lower()
 
-    if target == "zht":
-      target = "zh"
-    
-    if target == "sw":
-      target = "swc"
-    
-    if source == "sw":
-      source = "swc"
-
     result[target_current] = []
 
     for text in text_arr:
-
-      if source == "zht":
-        text = t2s(text)
-        source = "zh"
-
-      if source != "en":
-        text_en = translate_text(text, source, "en")
-      else:
-        text_en = text
-
-      if target != "en":
-        translation = translate_text(text_en, "en", target)
-      else:
-        translation = text_en
-      
-      if target_current == "zht":
-        translation = s2t(translation)
-
+      translation = translate_text(text, src=available_languages[source], target=available_languages[target])
       result[target_current].append(translation)
 
   return {"translatedText": result}
