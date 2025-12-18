@@ -22,7 +22,7 @@ available_languages = {
   "de": "deu_Latn",
   "es": "spa_Latn",
   "pt": "por_Latn",
-  "pt_BR": "por_Brai",  # Brazilian Portuguese
+  "pt_br": "por_Latn",
   "ru": "rus_Cyrl",
   "zh": "zho_Hans",
   "zht": "zho_Hant",
