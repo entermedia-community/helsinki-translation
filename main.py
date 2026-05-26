@@ -45,6 +45,8 @@ available_languages = {
 def translate_text(text: str, src: str, target: str, max_length: Optional[int] = None) -> str:
   if max_length is None:
     max_length = len(text.split()) * 3 + 50
+    if len(text.split()) < 4:
+      max_length = len(text.split()) * 4
   tokenizer.src_lang = src
   inputs = tokenizer(
     text, 
