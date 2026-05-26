@@ -68,30 +68,27 @@ def translate_text(
   _ = profile
   word_count = max(1, len(text.split()))
   if max_length is None:
-    max_length = min(256, max(16, word_count * 4 + 16))
+    max_length = min(512, max(16, word_count * 4 + 16))
   tokenizer.src_lang = src 
   inputs = tokenizer(
     text, 
     return_tensors="pt", 
     padding=True, 
     truncation=True,
-    # max_length=max_length
+    max_length=max_length
   ).to(device)
   
   target_id = get_language_id(target)
 
   if word_count <= 2:
     max_new_tokens = 4
-    length_penalty = 0.6
   else:
     max_new_tokens = min(64, max(8, word_count * 3 + 6))
-    length_penalty = 1.0
 
   generated_tokens = model.generate(
     **inputs, 
     forced_bos_token_id=target_id, 
-    num_beams=4, 
-    do_sample=False,
+    num_beams=5, 
     early_stopping=True, 
     max_new_tokens=max_new_tokens,
     repetition_penalty=1.05
