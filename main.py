@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
-from functools import lru_cache
+# from functools import lru_cache
 
 app = FastAPI(title="eMedia Translation API")
 
@@ -57,7 +57,7 @@ def get_language_id(lang_code: str) -> int:
 
   return lang_id
 
-@lru_cache(maxsize=64)
+# @lru_cache(maxsize=64)
 def translate_text(
   text: str,
   src: str,
@@ -75,7 +75,7 @@ def translate_text(
     return_tensors="pt", 
     padding=True, 
     truncation=True,
-    max_length=max_length
+    # max_length=max_length
   ).to(device)
   
   target_id = get_language_id(target)
@@ -94,7 +94,6 @@ def translate_text(
     do_sample=False,
     early_stopping=True, 
     max_new_tokens=max_new_tokens,
-    length_penalty=length_penalty,
     repetition_penalty=1.05
   )
   return tokenizer.batch_decode(
@@ -157,6 +156,7 @@ def translate(req: TranslateRequest):
 
       for text in text_arr:
         text = text.replace("\\/", "/")
+        text = text.strip()
         translation = translate_text(
           text,
           src=available_languages[source]["code"],
@@ -164,7 +164,7 @@ def translate(req: TranslateRequest):
           max_length=req.max_length,
           profile=TRANSLATION_PROFILE,
         )
-        result[target_current].append(translation)
+        result[target_current].append(translation.strip())
 
     return TranslationResponse(translatedText=result)
 
