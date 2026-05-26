@@ -4,10 +4,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
-# from functools import lru_cache
-# import requests
+from functools import lru_cache
+import requests
 
-# LLM_SERVER_URL = "http://0.0.0.0:7600/v1/chat/completions"
+LLM_SERVER_URL = "http://0.0.0.0:7600/v1/chat/completions"
 
 app = FastAPI(title="eMedia Translation API")
 
@@ -41,19 +41,17 @@ available_languages = {
   "sw": {"code": "swh_Latn", "name": "Swahili"}
 }
 
-# @lru_cache(maxsize=64)
+@lru_cache(maxsize=64)
 def translate_text(text: str, src: str, target: str, max_length: Optional[int] = None) -> str:
   if max_length is None:
     max_length = len(text.split()) * 3 + 50
-    if len(text.split()) < 4:
-      max_length = len(text.split()) * 4
   tokenizer.src_lang = src
   inputs = tokenizer(
     text, 
     return_tensors="pt", 
     padding=True, 
     truncation=True, 
-    max_new_tokens=max_length
+    max_length=max_length
   ).to(device)
 
   target_id = tokenizer.convert_tokens_to_ids(target)
@@ -62,7 +60,7 @@ def translate_text(text: str, src: str, target: str, max_length: Optional[int] =
     forced_bos_token_id=target_id, 
     num_beams=5, 
     early_stopping=True, 
-    max_new_tokens=max_length
+    max_length=max_length
   )
   return tokenizer.batch_decode(
     generated_tokens, 
@@ -94,6 +92,7 @@ class TranslateRequest(BaseModel):
   source: str = Field(..., description="Source language code, e.g. 'en'")
   target: Union[str, List[str]] = Field(..., description="Target language code(s), e.g. 'fr' or ['fr', 'de']")
   max_length: Optional[int] = Field(None, description="Maximum length of the translated text")
+  ai_verify: Optional[bool] = Field(True, description="Whether to use AI verification for the translation")
 
 class TranslationResponse(BaseModel):
   translatedText: dict = Field(..., description="Dictionary with target language codes as keys and list of translated texts as values")
@@ -123,10 +122,12 @@ def translate(req: TranslateRequest):
       result[target_current] = []
 
       for text in text_arr:
-        text = text.replace("\\/", "/")
-        text = text.strip()
         translation = translate_text(text, src=available_languages[source]["code"], target=available_languages[target]["code"], max_length=req.max_length)
-        result[target_current].append(translation.strip())
+        if req.ai_verify:
+          corrected_translation = llm_verify(text, translation, source, target)
+        else:
+          corrected_translation = translation
+        result[target_current].append(corrected_translation)
 
     return TranslationResponse(translatedText=result)
 
@@ -135,3 +136,31 @@ def translate(req: TranslateRequest):
       status_code=500, 
       detail=f"Translation error: {str(e)}"
     )
+
+def llm_verify(source_text: str, translated_text: str, source_lang: str, target_lang: str) -> str:
+  prompt = (
+    f"You are a professional translator and proofreader. "
+    f"A text was translated from {available_languages[source_lang]['name']} to {available_languages[target_lang]['name']}. "
+    f"Review the translation for grammar errors, mistranslations, and pay special attention to "
+    f"organization names and people's names — ensure they are correctly transliterated or kept as-is if appropriate. "
+    f"Also verify that grammatical genders are correctly applied throughout the translation. "
+    f"Return only the corrected translation with no explanations, notes, or extra text.\n\n"
+    f"Original ({available_languages[source_lang]['name']}):\n{source_text}\n\n"
+    f"Translation ({available_languages[target_lang]['name']}):\n{translated_text}\n\n"
+    f"Corrected translation:"
+  )
+  try:
+    response = requests.post(
+      LLM_SERVER_URL,
+      json={
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": len(translated_text.split()) * 3 + 50,
+        "stream": False,
+      },
+      timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
+  except Exception:
+    return translated_text
