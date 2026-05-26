@@ -51,7 +51,7 @@ def translate_text(text: str, src: str, target: str, max_length: Optional[int] =
     return_tensors="pt", 
     padding=True, 
     truncation=True, 
-    max_length=max_length
+    max_new_tokens=max_length
   ).to(device)
 
   target_id = tokenizer.convert_tokens_to_ids(target)
@@ -60,7 +60,7 @@ def translate_text(text: str, src: str, target: str, max_length: Optional[int] =
     forced_bos_token_id=target_id, 
     num_beams=5, 
     early_stopping=True, 
-    max_length=max_length
+    max_new_tokens=max_length
   )
   return tokenizer.batch_decode(
     generated_tokens, 
