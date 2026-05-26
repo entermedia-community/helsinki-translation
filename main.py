@@ -5,15 +5,13 @@ from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 from functools import lru_cache
-import requests
-
-LLM_SERVER_URL = "http://0.0.0.0:7600/v1/chat/completions"
 
 app = FastAPI(title="eMedia Translation API")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 MODEL_NAME = "facebook/nllb-200-1.3B"
+TRANSLATION_PROFILE = "v2"
 
 def load_model():
   model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME).to(device)
@@ -41,26 +39,63 @@ available_languages = {
   "sw": {"code": "swh_Latn", "name": "Swahili"}
 }
 
+
+def get_language_id(lang_code: str) -> int:
+  lang_code_map = getattr(tokenizer, "lang_code_to_id", None)
+  if isinstance(lang_code_map, dict):
+    lang_id = lang_code_map.get(lang_code)
+    if lang_id is not None:
+      return lang_id
+
+  lang_id = tokenizer.convert_tokens_to_ids(lang_code)
+  if lang_id is None:
+    raise ValueError(f"Unsupported tokenizer language code: {lang_code}")
+
+  unk_token_id = getattr(tokenizer, "unk_token_id", None)
+  if unk_token_id is not None and lang_id == unk_token_id:
+    raise ValueError(f"Unsupported tokenizer language code: {lang_code}")
+
+  return lang_id
+
 @lru_cache(maxsize=64)
-def translate_text(text: str, src: str, target: str, max_length: Optional[int] = None) -> str:
+def translate_text(
+  text: str,
+  src: str,
+  target: str,
+  max_length: Optional[int] = None,
+  profile: str = TRANSLATION_PROFILE,
+) -> str:
+  _ = profile
+  word_count = max(1, len(text.split()))
   if max_length is None:
-    max_length = len(text.split()) * 3 + 50
-  tokenizer.src_lang = src
+    max_length = min(256, max(16, word_count * 4 + 16))
+  tokenizer.src_lang = src 
   inputs = tokenizer(
     text, 
     return_tensors="pt", 
     padding=True, 
-    truncation=True, 
+    truncation=True,
     max_length=max_length
   ).to(device)
+  
+  target_id = get_language_id(target)
 
-  target_id = tokenizer.convert_tokens_to_ids(target)
+  if word_count <= 2:
+    max_new_tokens = 4
+    length_penalty = 0.6
+  else:
+    max_new_tokens = min(64, max(8, word_count * 3 + 6))
+    length_penalty = 1.0
+
   generated_tokens = model.generate(
     **inputs, 
     forced_bos_token_id=target_id, 
-    num_beams=5, 
+    num_beams=4, 
+    do_sample=False,
     early_stopping=True, 
-    max_length=max_length
+    max_new_tokens=max_new_tokens,
+    length_penalty=length_penalty,
+    repetition_penalty=1.05
   )
   return tokenizer.batch_decode(
     generated_tokens, 
@@ -92,7 +127,6 @@ class TranslateRequest(BaseModel):
   source: str = Field(..., description="Source language code, e.g. 'en'")
   target: Union[str, List[str]] = Field(..., description="Target language code(s), e.g. 'fr' or ['fr', 'de']")
   max_length: Optional[int] = Field(None, description="Maximum length of the translated text")
-  ai_verify: Optional[bool] = Field(True, description="Whether to use AI verification for the translation")
 
 class TranslationResponse(BaseModel):
   translatedText: dict = Field(..., description="Dictionary with target language codes as keys and list of translated texts as values")
@@ -122,12 +156,15 @@ def translate(req: TranslateRequest):
       result[target_current] = []
 
       for text in text_arr:
-        translation = translate_text(text, src=available_languages[source]["code"], target=available_languages[target]["code"], max_length=req.max_length)
-        if req.ai_verify:
-          corrected_translation = llm_verify(text, translation, source, target)
-        else:
-          corrected_translation = translation
-        result[target_current].append(corrected_translation)
+        text = text.replace("\\/", "/")
+        translation = translate_text(
+          text,
+          src=available_languages[source]["code"],
+          target=available_languages[target]["code"],
+          max_length=req.max_length,
+          profile=TRANSLATION_PROFILE,
+        )
+        result[target_current].append(translation)
 
     return TranslationResponse(translatedText=result)
 
@@ -136,31 +173,3 @@ def translate(req: TranslateRequest):
       status_code=500, 
       detail=f"Translation error: {str(e)}"
     )
-
-def llm_verify(source_text: str, translated_text: str, source_lang: str, target_lang: str) -> str:
-  prompt = (
-    f"You are a professional translator and proofreader. "
-    f"A text was translated from {available_languages[source_lang]['name']} to {available_languages[target_lang]['name']}. "
-    f"Review the translation for grammar errors, mistranslations, and pay special attention to "
-    f"organization names and people's names — ensure they are correctly transliterated or kept as-is if appropriate. "
-    f"Also verify that grammatical genders are correctly applied throughout the translation. "
-    f"Return only the corrected translation with no explanations, notes, or extra text.\n\n"
-    f"Original ({available_languages[source_lang]['name']}):\n{source_text}\n\n"
-    f"Translation ({available_languages[target_lang]['name']}):\n{translated_text}\n\n"
-    f"Corrected translation:"
-  )
-  try:
-    response = requests.post(
-      LLM_SERVER_URL,
-      json={
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
-        "max_tokens": len(translated_text.split()) * 3 + 50,
-        "stream": False,
-      },
-      timeout=60,
-    )
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"].strip()
-  except Exception:
-    return translated_text
