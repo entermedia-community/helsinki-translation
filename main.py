@@ -5,13 +5,15 @@ from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 # from functools import lru_cache
+# import requests
+
+# LLM_SERVER_URL = "http://0.0.0.0:7600/v1/chat/completions"
 
 app = FastAPI(title="eMedia Translation API")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 MODEL_NAME = "facebook/nllb-200-1.3B"
-TRANSLATION_PROFILE = "v2"
 
 def load_model():
   model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME).to(device)
@@ -39,59 +41,26 @@ available_languages = {
   "sw": {"code": "swh_Latn", "name": "Swahili"}
 }
 
-
-def get_language_id(lang_code: str) -> int:
-  lang_code_map = getattr(tokenizer, "lang_code_to_id", None)
-  if isinstance(lang_code_map, dict):
-    lang_id = lang_code_map.get(lang_code)
-    if lang_id is not None:
-      return lang_id
-
-  lang_id = tokenizer.convert_tokens_to_ids(lang_code)
-  if lang_id is None:
-    raise ValueError(f"Unsupported tokenizer language code: {lang_code}")
-
-  unk_token_id = getattr(tokenizer, "unk_token_id", None)
-  if unk_token_id is not None and lang_id == unk_token_id:
-    raise ValueError(f"Unsupported tokenizer language code: {lang_code}")
-
-  return lang_id
-
 # @lru_cache(maxsize=64)
-def translate_text(
-  text: str,
-  src: str,
-  target: str,
-  max_length: Optional[int] = None,
-  profile: str = TRANSLATION_PROFILE,
-) -> str:
-  _ = profile
-  word_count = max(1, len(text.split()))
+def translate_text(text: str, src: str, target: str, max_length: Optional[int] = None) -> str:
   if max_length is None:
-    max_length = min(512, max(16, word_count * 4 + 16))
-  tokenizer.src_lang = src 
+    max_length = len(text.split()) * 3 + 50
+  tokenizer.src_lang = src
   inputs = tokenizer(
     text, 
     return_tensors="pt", 
     padding=True, 
-    truncation=True,
+    truncation=True, 
     max_length=max_length
   ).to(device)
-  
-  target_id = get_language_id(target)
 
-  if word_count <= 2:
-    max_new_tokens = 4
-  else:
-    max_new_tokens = min(64, max(8, word_count * 3 + 6))
-
+  target_id = tokenizer.convert_tokens_to_ids(target)
   generated_tokens = model.generate(
     **inputs, 
     forced_bos_token_id=target_id, 
     num_beams=5, 
     early_stopping=True, 
-    max_new_tokens=max_new_tokens,
-    repetition_penalty=1.05
+    max_length=max_length
   )
   return tokenizer.batch_decode(
     generated_tokens, 
@@ -154,13 +123,7 @@ def translate(req: TranslateRequest):
       for text in text_arr:
         text = text.replace("\\/", "/")
         text = text.strip()
-        translation = translate_text(
-          text,
-          src=available_languages[source]["code"],
-          target=available_languages[target]["code"],
-          max_length=req.max_length,
-          profile=TRANSLATION_PROFILE,
-        )
+        translation = translate_text(text, src=available_languages[source]["code"], target=available_languages[target]["code"], max_length=req.max_length)
         result[target_current].append(translation.strip())
 
     return TranslationResponse(translatedText=result)
