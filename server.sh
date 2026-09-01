@@ -22,3 +22,5 @@ python -m uvicorn main:app \
   --host 0.0.0.0 \
   --workers 1 \
   2>&1 | multilog t s5000000 n3 "$LOGFILE" &
+
+deactivate

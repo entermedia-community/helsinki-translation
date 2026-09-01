@@ -4,3 +4,4 @@ pydantic
 transformers
 torch
 accelerate
+requests
