@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# Uvicorn Translation launcher script for Docker container
+# All configurations are loaded from .env file in the same directory as this script or in /root/.env
+
+# Kill any process running on port 8600
 lsof -ti :8600 | xargs -r kill -9
 
 # Load environment variables if .env exists
