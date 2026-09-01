@@ -20,4 +20,5 @@ mkdir -p "$LOGFILE"
 python -m uvicorn main:app \
   --port 8600 \
   --host 0.0.0.0 \
-  --workers 1 > /dev/null 2>&1 | multilog t s5000000 n3 "$LOGFILE" &
+  --workers 1 \
+  2>&1 | multilog t s5000000 n3 "$LOGFILE" &
