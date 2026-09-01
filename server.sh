@@ -17,7 +17,7 @@ fi
 LOGFILE=/root/logs/uvicorn
 mkdir -p "$LOGFILE"
 
-python -m uvicorn main:app \
+uvicorn main:app \
   --port 8600 \
   --host 0.0.0.0 \
   --workers 1 \
