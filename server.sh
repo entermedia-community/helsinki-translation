@@ -17,7 +17,8 @@ elif [ -f "$(dirname "$0")/.env" ]; then
     set +a
 fi
 
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
+#export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
+export CUDA_VISIBLE_DEVICES=1
 
 if [[ -f ".venv/bin/activate" ]]; then
   source .venv/bin/activate
